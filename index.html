@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title> HCJ editer Ver-1</title>
+    <title> HCJ editer Ver-4</title>
     <style>
         :root {
             --editor-bg: #1e1e1e;
@@ -145,7 +145,7 @@
 
         if (type === 'js') {
             // ★ 修正ポイント：=> を演算子(= < > !)より先に判定
-            const jsRegex = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\/\/.*)|(\b(?:let|const|var|function|if|else|return|class)\b)|(\b(?:console|window|document|Math|JSON)\b)|(\b(?:true|false|\d+)\b)|(=&gt;)|([=<>!]+)|(\b\w+(?=\s*\())/g;
+            const jsRegex = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\/\/.*)|(\b(?:let|const|var|function|if|else|return|class)\b)|(\b(?:console|window|document|Math|JSON)\b)|(\b(?:true|false|\d+)\b)|(=&gt;)|(&lt;|&gt;|[=<>!]+)|(\b\w+(?=\s*\())/g;
             
             return escaped.replace(jsRegex, (m, str, comm, key, obj, val, arrow, op, func) => {
                 if (str) return `<span class="hl-str">${str}</span>`;
@@ -219,7 +219,7 @@
             <script>
                 (function() {
                     window.onerror = function(m, u, l, c, e) {
-                        window.parent.postMessage({ type: 'error', content: 'Error: ' + m + '}, '*');
+                        window.parent.postMessage({ type: 'error', content: 'Error: ' + m }, '*');
                     };
                     console.log = function(...args) {
                         window.parent.postMessage({ type: 'log', content: args.map(a => {
@@ -246,5 +246,4 @@
     updateEditor();
 </script>
 </body>
-
 </html>
