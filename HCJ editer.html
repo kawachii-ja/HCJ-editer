@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title> HCJ editer Ver-4</title>
+    <style>
+        :root {
+            --editor-bg: #1e1e1e;
+            --line-num-bg: #2b2b2b;
+            --accent-purple: #8e44ad;
+            /* 指定カラー */
+            --color-tag: #d72667;
+            --color-class-name: #f0bf4c;
+            --color-class-key: #d4ed31;
+            --color-prop-var-func: #5bd1d7;
+            --color-object: #9AD02F;
+            --color-string: #D6B746;
+            --color-num-bool: #6F68E9;
+            --color-operator: #d72667;
+        }
+
+        body { margin: 0; font-family: sans-serif; background: #f0f4f8; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .main-container { display: flex; flex: 1; gap: 10px; padding: 10px; height: calc(100vh - 20px); }
+
+        .editor-section { flex: 1; display: flex; flex-direction: column; background: var(--editor-bg); border-radius: 8px; overflow: hidden; }
+        .tabs { display: flex; background: #252526; }
+        .tab { padding: 10px 20px; color: #ccc; cursor: pointer; font-size: 13px; background: #333; border-right: 1px solid #222; }
+        .tab.active { background: var(--editor-bg); color: white; border-bottom: 2px solid var(--accent-purple); }
+
+        .editor-wrapper { flex: 1; position: relative; display: flex; overflow: hidden; }
+        .line-numbers { 
+            width: 45px; background: var(--line-num-bg); color: #858585; 
+            text-align: right; padding: 15px 5px; font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 16px; line-height: 1.5; user-select: none;
+        }
+
+        .edit-area { position: relative; flex: 1; overflow: hidden; }
+        
+        .code-font {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+            font-size: 16px !important;
+            line-height: 1.5 !important;
+            letter-spacing: 0px !important;
+            tab-size: 4;
+            white-space: pre !important;
+        }
+
+        .highlight-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            padding: 15px; box-sizing: border-box;
+            pointer-events: none; color: #d4d4d4; z-index: 1;
+        }
+
+        textarea {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: transparent; color: transparent; caret-color: white;
+            border: none; padding: 15px; box-sizing: border-box;
+            resize: none; outline: none; z-index: 2; overflow: auto;
+        }
+
+        .preview-section { flex: 1; display: flex; flex-direction: column; background: white; border-radius: 8px; border: 1px solid #ddd; }
+        .display-tabs { display: flex; background: #333; }
+        .display-tab { padding: 10px 20px; font-size: 13px; cursor: pointer; color: #fff; background: #666; }
+        .display-tab.active { background: #000; }
+
+        #preview-frame { flex: 1; border: none; width: 100%; background: white;}
+        #console-output { flex: 1; background: white; padding: 10px; font-family: monospace; font-size: 14px; overflow-y: auto; display: none; color: black; }
+
+        /* ハイライト色 */
+        .hl-tag { color: var(--color-tag); }
+        .hl-class-key { color: var(--color-class-key); }
+        .hl-class-name { color: var(--color-class-name); }
+        .hl-prop { color: var(--color-prop-var-func); }
+        .hl-obj { color: var(--color-object); }
+        .hl-str { color: var(--color-string); }
+        .hl-val { color: var(--color-num-bool); }
+        .hl-op { color: var(--color-operator); }
+
+        .footer { padding: 10px; background: #252526; display: flex; justify-content: flex-end; }
+        .run-btn { background: var(--accent-purple); color: white; border: none; padding: 8px 25px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        
+        .log-entry { border-bottom: 1px solid #eee; padding: 5px; white-space: pre-wrap; font-family: monospace; }
+        .log-error { color: #d32f2f; background: #fff1f0; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <div class="editor-section">
+        <div class="tabs">
+            <div class="tab active" data-type="html">HTML</div>
+            <div class="tab" data-type="css">CSS</div>
+            <div class="tab" data-type="js">JavaScript</div>
+        </div>
+        <div class="editor-wrapper">
+            <div id="line-numbers" class="line-numbers">1</div>
+            <div class="edit-area">
+                <div id="highlight-layer" class="highlight-layer code-font"></div>
+                <textarea id="main-editor" class="code-font" spellcheck="false" wrap="off"></textarea>
+            </div>
+        </div>
+        <div class="footer">
+            <button class="run-btn" onclick="runCode()">コードを実行 ▶</button>
+        </div>
+    </div>
+
+    <div class="preview-section">
+        <div class="display-tabs">
+            <div id="tab-browser" class="display-tab active" onclick="switchDisplay('browser')">ブラウザ</div>
+            <div id="tab-console" class="display-tab" onclick="switchDisplay('console')">結果コンソール</div>
+        </div>
+        <iframe id="preview-frame"></iframe>
+        <div id="console-output"></div>
+    </div>
+</div>
+
+<script>
+    const state = { current: 'html', html: '', css: '', js: '' };
+    const editor = document.getElementById('main-editor');
+    const hlLayer = document.getElementById('highlight-layer');
+    const lineNums = document.getElementById('line-numbers');
+
+    function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function highlight(code, type) {
+        if (!code) return "";
+        let escaped = escapeHtml(code);
+
+        if (type === 'html') {
+            const htmlRegex = /(&lt;\/?[a-z1-6]+)|(class=)|(".*?")/gi;
+            return escaped.replace(htmlRegex, (m, tag, clsKey, str) => {
+                if (tag) return `<span class="hl-tag">${tag}</span>`;
+                if (clsKey) return `<span class="hl-class-key">class</span>=`;
+                if (str) return `<span class="hl-class-name">${str}</span>`;
+                return m;
+            });
+        }
+
+        if (type === 'css') {
+            const cssRegex = /([a-z-]+\s*:\s*[^;{}]+)/gi;
+            return escaped.replace(cssRegex, `<span class="hl-prop">$1</span>`);
+        }
+
+        if (type === 'js') {
+            // ★ 修正ポイント：=> を演算子(= < > !)より先に判定
+            const jsRegex = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\/\/.*)|(\b(?:let|const|var|function|if|else|return|class)\b)|(\b(?:console|window|document|Math|JSON)\b)|(\b(?:true|false|\d+)\b)|(=&gt;)|([=<>!]+)|(\b\w+(?=\s*\())/g;
+            
+            return escaped.replace(jsRegex, (m, str, comm, key, obj, val, arrow, op, func) => {
+                if (str) return `<span class="hl-str">${str}</span>`;
+                if (comm) return `<span style="color: #6a9955">${comm}</span>`;
+                if (key) return `<span class="hl-prop">${key}</span>`; // let, const 等
+                if (obj) return `<span class="hl-obj">${obj}</span>`;
+                if (val) return `<span class="hl-val">${val}</span>`;
+                if (arrow) return `<span class="hl-prop">=&gt;</span>`; // => は関数扱い
+                if (op) return `<span class="hl-op">${op}</span>`; // = < > !
+                if (func) return `<span class="hl-prop">${func}</span>`; // 関数名
+                return m;
+            });
+        }
+        return escaped;
+    }
+
+    function updateEditor() {
+        const code = editor.value;
+        state[state.current] = code;
+        hlLayer.innerHTML = highlight(code, state.current) + "\n";
+        const lines = code.split('\n').length;
+        lineNums.innerHTML = Array.from({length: lines}, (_, i) => i + 1).join('<br>');
+    }
+
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            state.current = tab.dataset.type;
+            editor.value = state[state.current] || '';
+            updateEditor();
+        });
+    });
+
+    editor.addEventListener('input', updateEditor);
+    editor.addEventListener('scroll', () => {
+        hlLayer.scrollTop = editor.scrollTop;
+        hlLayer.scrollLeft = editor.scrollLeft;
+        lineNums.scrollTop = editor.scrollTop;
+    });
+
+    editor.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            editor.value = editor.value.substring(0, start) + "    " + editor.value.substring(end);
+            editor.selectionStart = editor.selectionEnd = start + 4;
+            updateEditor();
+        }
+    });
+
+    function switchDisplay(type) {
+        document.querySelectorAll('.display-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('preview-frame').style.display = 'none';
+        document.getElementById('console-output').style.display = 'none';
+        if (type === 'browser') {
+            document.getElementById('tab-browser').classList.add('active');
+            document.getElementById('preview-frame').style.display = 'block';
+        } else {
+            document.getElementById('tab-console').classList.add('active');
+            document.getElementById('console-output').style.display = 'block';
+        }
+    }
+
+    function runCode() {
+        document.getElementById('console-output').innerHTML = '';
+        const finalCode = `
+            <style>${state.css}</style>
+            ${state.html}
+            <script>
+                (function() {
+                    window.onerror = function(m, u, l, c, e) {
+                        window.parent.postMessage({ type: 'error', content: 'Error: ' + m + '}, '*');
+                    };
+                    console.log = function(...args) {
+                        window.parent.postMessage({ type: 'log', content: args.map(a => {
+                            if(typeof a === 'object') return JSON.stringify(a);
+                            return String(a);
+                        }).join(' ') }, '*');
+                    };
+                })();
+            <\/script>
+            <script>${state.js}<\/script>
+        `;
+        document.getElementById('preview-frame').srcdoc = finalCode;
+    }
+
+    window.addEventListener('message', (e) => {
+        const out = document.getElementById('console-output');
+        const div = document.createElement('div');
+        div.className = 'log-entry ' + (e.data.type === 'error' ? 'log-error' : '');
+        div.textContent = `> ${e.data.content}`;
+        out.appendChild(div);
+        out.scrollTop = out.scrollHeight;
+    });
+
+    updateEditor();
+</script>
+</body>
+</html>
