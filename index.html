@@ -235,6 +235,9 @@
     }
 
     window.addEventListener('message', (e) => {
+        // プレビュー用iframe以外からのメッセージ（拡張機能など）は無視する
+        if (e.source !== document.getElementById('preview-frame').contentWindow) return;
+
         const out = document.getElementById('console-output');
         const div = document.createElement('div');
         div.className = 'log-entry ' + (e.data.type === 'error' ? 'log-error' : '');
@@ -247,4 +250,3 @@
 </script>
 </body>
 </html>
-
